@@ -55,7 +55,7 @@ typedef uint32_t hal_timer_t;
 #define FTM1_TIMER_RATE (F_BUS / FTM1_TIMER_PRESCALE) // 60MHz / 4 = 15MHz
 
 #define STEPPER_TIMER STEP_TIMER_NUM // Alias?
-#define STEPPER_TIMER_PRESCALE 0 // Not defined anywhere else!
+#define STEPPER_TIMER_PRESCALE (CYCLES_PER_MICROSECOND / HAL_TICKS_PER_US)
 
 #define PULSE_TIMER_NUM STEP_TIMER_NUM
 #define PULSE_TIMER_PRESCALE STEPPER_TIMER_PRESCALE
@@ -66,6 +66,8 @@ typedef uint32_t hal_timer_t;
 
 #define TEMP_TIMER_FREQUENCY   1000
 
+#define STEP_TIMER_MIN_INTERVAL   8 // minimum time in µs between stepper interrupts
+
 #define ENABLE_STEPPER_DRIVER_INTERRUPT() HAL_timer_enable_interrupt(STEP_TIMER_NUM)
 #define DISABLE_STEPPER_DRIVER_INTERRUPT() HAL_timer_disable_interrupt(STEP_TIMER_NUM)
 #define STEPPER_ISR_ENABLED() HAL_timer_interrupt_enabled(STEP_TIMER_NUM)
@@ -75,8 +77,6 @@ typedef uint32_t hal_timer_t;
 
 #define HAL_STEP_TIMER_ISR  extern "C" void ftm0_isr(void) //void TC3_Handler()
 #define HAL_TEMP_TIMER_ISR  extern "C" void ftm1_isr(void) //void TC4_Handler()
-
-#define HAL_ENABLE_ISRs() do { if (thermalManager.in_temp_isr) DISABLE_TEMPERATURE_INTERRUPT(); else ENABLE_TEMPERATURE_INTERRUPT(); ENABLE_STEPPER_DRIVER_INTERRUPT(); } while(0)
 
 void HAL_timer_start(const uint8_t timer_num, const uint32_t frequency);
 
@@ -103,10 +103,16 @@ FORCE_INLINE static hal_timer_t HAL_timer_get_count(const uint8_t timer_num) {
   return 0;
 }
 
+FORCE_INLINE static void HAL_timer_restrain(const uint8_t timer_num, const uint16_t interval_ticks) {
+  const hal_timer_t mincmp = HAL_timer_get_count(timer_num) + interval_ticks;
+  if (HAL_timer_get_compare(timer_num) < mincmp) HAL_timer_set_compare(timer_num, mincmp);
+}
+
 void HAL_timer_enable_interrupt(const uint8_t timer_num);
 void HAL_timer_disable_interrupt(const uint8_t timer_num);
 bool HAL_timer_interrupt_enabled(const uint8_t timer_num);
 
 void HAL_timer_isr_prologue(const uint8_t timer_num);
+#define HAL_timer_isr_epilogue(TIMER_NUM)
 
 #endif // _HAL_TIMERS_TEENSY_H

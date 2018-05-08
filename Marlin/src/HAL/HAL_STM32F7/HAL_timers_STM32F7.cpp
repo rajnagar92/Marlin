@@ -26,7 +26,7 @@
 // Includes
 // --------------------------------------------------------------------------
 
-#include "../HAL.h"
+#include "HAL.h"
 
 #include "HAL_timers_STM32F7.h"
 
@@ -135,6 +135,11 @@ hal_timer_t HAL_timer_get_compare(const uint8_t timer_num) {
 
 uint32_t HAL_timer_get_count(const uint8_t timer_num) {
   return __HAL_TIM_GetCounter(&timerConfig[timer_num].timerdef);
+}
+
+void HAL_timer_restrain(const uint8_t timer_num, const uint16_t interval_ticks) {
+  const hal_timer_t mincmp = HAL_timer_get_count(timer_num) + interval_ticks;
+  if (HAL_timer_get_compare(timer_num) < mincmp) HAL_timer_set_compare(timer_num, mincmp);
 }
 
 void HAL_timer_isr_prologue(const uint8_t timer_num) {

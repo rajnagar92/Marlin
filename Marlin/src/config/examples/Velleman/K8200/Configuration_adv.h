@@ -243,6 +243,7 @@
 #define E2_AUTO_FAN_PIN -1
 #define E3_AUTO_FAN_PIN -1
 #define E4_AUTO_FAN_PIN -1
+#define CHAMBER_AUTO_FAN_PIN -1
 #define EXTRUDER_AUTO_FAN_TEMPERATURE 50
 #define EXTRUDER_AUTO_FAN_SPEED   255  // == full speed
 
@@ -505,9 +506,6 @@
 // Include a page of printer information in the LCD Main Menu
 //#define LCD_INFO_MENU
 
-// Leave out seldom-used LCD menu items to recover some Program Memory
-//#define SLIM_LCD_MENUS
-
 // Scroll a longer status message into view
 //#define STATUS_MESSAGE_SCROLLING
 
@@ -568,6 +566,16 @@
   //#define MENU_ADDAUTOSTART
 
   /**
+   * Continue after Power-Loss (Creality3D)
+   *
+   * Store the current state to the SD Card at the start of each layer
+   * during SD printing. If the recovery file is found at boot time, present
+   * an option on the LCD screen to continue the print from the last-known
+   * point in the file.
+   */
+  //#define POWER_LOSS_RECOVERY
+
+  /**
    * Sort SD file listings in alphabetical order.
    *
    * With this option enabled, items on SD cards will be sorted
@@ -625,6 +633,11 @@
    */
   //#define SD_REPRINT_LAST_SELECTED_FILE
 
+  /**
+   * Auto-report SdCard status with M27 S<seconds>
+   */
+  //#define AUTO_REPORT_SD_STATUS
+
 #endif // SDSUPPORT
 
 /**
@@ -673,6 +686,9 @@
      * Since LIGHTWEIGHT_UI has limited space, the position and status
      * message occupy the same line. Set STATUS_EXPIRE_SECONDS to the
      * length of time to display the status message before clearing.
+     *
+     * Set STATUS_EXPIRE_SECONDS to zero to never clear the status.
+     * This will prevent position updates from being displayed.
      */
     //#define LIGHTWEIGHT_UI
     #if ENABLED(LIGHTWEIGHT_UI)
@@ -742,18 +758,36 @@
 
 // @section leveling
 
-#if ENABLED(DELTA) && !defined(DELTA_PROBEABLE_RADIUS)
-  #define DELTA_PROBEABLE_RADIUS DELTA_PRINTABLE_RADIUS
-#elif IS_SCARA && !defined(SCARA_PRINTABLE_RADIUS)
-  #define SCARA_PRINTABLE_RADIUS (SCARA_LINKAGE_1 + SCARA_LINKAGE_2)
-#endif
-
 #if ENABLED(MESH_BED_LEVELING) || ENABLED(AUTO_BED_LEVELING_UBL)
   // Override the mesh area if the automatic (max) area is too large
   //#define MESH_MIN_X MESH_INSET
   //#define MESH_MIN_Y MESH_INSET
   //#define MESH_MAX_X X_BED_SIZE - (MESH_INSET)
   //#define MESH_MAX_Y Y_BED_SIZE - (MESH_INSET)
+#endif
+
+/**
+ * Repeatedly attempt G29 leveling until it succeeds.
+ * Stop after G29_MAX_RETRIES attempts.
+ */
+//#define G29_RETRY_AND_RECOVER
+#if ENABLED(G29_RETRY_AND_RECOVER)
+  #define G29_MAX_RETRIES 3
+  #define G29_HALT_ON_FAILURE
+  /**
+   * Specify the GCODE commands that will be executed when leveling succeeds,
+   * between attempts, and after the maximum number of retries have been tried.
+   */
+  #define G29_SUCCESS_COMMANDS "M117 Bed leveling done."
+  #define G29_RECOVER_COMMANDS "M117 Probe failed. Rewiping.\nG28\nG12 P0 S12 T0"
+  #define G29_FAILURE_COMMANDS "M117 Bed leveling failed.\nG0 Z10\nM300 P25 S880\nM300 P50 S0\nM300 P25 S880\nM300 P50 S0\nM300 P25 S880\nM300 P50 S0\nG4 S1"
+  /**
+   * Specify an action command to send to the host on a recovery attempt or failure.
+   * Will be sent in the form '//action:ACTION_ON_G29_FAILURE', e.g. '//action:probe_failed'.
+   * The host must be configured to handle the action command.
+   */
+  #define G29_ACTION_ON_RECOVER "probe_rewipe"
+  #define G29_ACTION_ON_FAILURE "probe_failed"
 #endif
 
 // @section extras
@@ -784,7 +818,8 @@
 
 // The minimum pulse width (in µs) for stepping a stepper.
 // Set this if you find stepping unreliable, or if using a very fast CPU.
-#define MINIMUM_STEPPER_PULSE 0 // (µs) The smallest stepper pulse allowed
+// 0 is OK for AVR, 0 is OK for A4989 drivers, 2 is needed for DRV8825 drivers
+#define MINIMUM_STEPPER_PULSE 2 // (µs)   DRV8825 on 32bit CPUs
 
 // @section temperature
 
@@ -909,38 +944,44 @@
  */
 //#define ADVANCED_PAUSE_FEATURE
 #if ENABLED(ADVANCED_PAUSE_FEATURE)
-  #define PAUSE_PARK_RETRACT_FEEDRATE 60      // (mm/s) Initial retract feedrate.
-  #define PAUSE_PARK_RETRACT_LENGTH 2         // (mm) Initial retract.
-                                              // This short retract is done immediately, before parking the nozzle.
-  #define FILAMENT_CHANGE_UNLOAD_FEEDRATE 10  // (mm/s) Unload filament feedrate. This can be pretty fast.
-  #define FILAMENT_CHANGE_UNLOAD_LENGTH 100   // (mm) The length of filament for a complete unload.
-                                              //   For Bowden, the full length of the tube and nozzle.
-                                              //   For direct drive, the full length of the nozzle.
-                                              //   Set to 0 for manual unloading.
-  #define FILAMENT_CHANGE_LOAD_FEEDRATE 6     // (mm/s) Load filament feedrate. This can be pretty fast.
-  #define FILAMENT_CHANGE_LOAD_LENGTH 0       // (mm) Load length of filament, from extruder gear to nozzle.
-                                              //   For Bowden, the full length of the tube and nozzle.
-                                              //   For direct drive, the full length of the nozzle.
-  #define ADVANCED_PAUSE_EXTRUDE_FEEDRATE 3   // (mm/s) Extrude feedrate (after loading). Should be slower than load feedrate.
-  #define ADVANCED_PAUSE_EXTRUDE_LENGTH 50    // (mm) Length to extrude after loading.
-                                              //   Set to 0 for manual extrusion.
-                                              //   Filament can be extruded repeatedly from the Filament Change menu
-                                              //   until extrusion is consistent, and to purge old filament.
+  #define PAUSE_PARK_RETRACT_FEEDRATE         60  // (mm/s) Initial retract feedrate.
+  #define PAUSE_PARK_RETRACT_LENGTH            2  // (mm) Initial retract.
+                                                  // This short retract is done immediately, before parking the nozzle.
+  #define FILAMENT_CHANGE_UNLOAD_FEEDRATE     10  // (mm/s) Unload filament feedrate. This can be pretty fast.
+  #define FILAMENT_CHANGE_UNLOAD_ACCEL        25  // (mm/s^2) Lower acceleration may allow a faster feedrate.
+  #define FILAMENT_CHANGE_UNLOAD_LENGTH      100  // (mm) The length of filament for a complete unload.
+                                                  //   For Bowden, the full length of the tube and nozzle.
+                                                  //   For direct drive, the full length of the nozzle.
+                                                  //   Set to 0 for manual unloading.
+  #define FILAMENT_CHANGE_SLOW_LOAD_FEEDRATE   6  // (mm/s) Slow move when starting load.
+  #define FILAMENT_CHANGE_SLOW_LOAD_LENGTH     0  // (mm) Slow length, to allow time to insert material.
+                                                  // 0 to disable start loading and skip to fast load only
+  #define FILAMENT_CHANGE_FAST_LOAD_FEEDRATE   6  // (mm/s) Load filament feedrate. This can be pretty fast.
+  #define FILAMENT_CHANGE_FAST_LOAD_ACCEL     25  // (mm/s^2) Lower acceleration may allow a faster feedrate.
+  #define FILAMENT_CHANGE_FAST_LOAD_LENGTH     0  // (mm) Load length of filament, from extruder gear to nozzle.
+                                                  //   For Bowden, the full length of the tube and nozzle.
+                                                  //   For direct drive, the full length of the nozzle.
+  //#define ADVANCED_PAUSE_CONTINUOUS_PURGE       // Purge continuously up to the purge length until interrupted.
+  #define ADVANCED_PAUSE_PURGE_FEEDRATE        3  // (mm/s) Extrude feedrate (after loading). Should be slower than load feedrate.
+  #define ADVANCED_PAUSE_PURGE_LENGTH         50  // (mm) Length to extrude after loading.
+                                                  //   Set to 0 for manual extrusion.
+                                                  //   Filament can be extruded repeatedly from the Filament Change menu
+                                                  //   until extrusion is consistent, and to purge old filament.
 
-                                              // Filament Unload does a Retract, Delay, and Purge first:
-  #define FILAMENT_UNLOAD_RETRACT_LENGTH 13   // (mm) Unload initial retract length.
-  #define FILAMENT_UNLOAD_DELAY 5000          // (ms) Delay for the filament to cool after retract.
-  #define FILAMENT_UNLOAD_PURGE_LENGTH 8      // (mm) An unretract is done, then this length is purged.
+                                                  // Filament Unload does a Retract, Delay, and Purge first:
+  #define FILAMENT_UNLOAD_RETRACT_LENGTH      13  // (mm) Unload initial retract length.
+  #define FILAMENT_UNLOAD_DELAY             5000  // (ms) Delay for the filament to cool after retract.
+  #define FILAMENT_UNLOAD_PURGE_LENGTH         8  // (mm) An unretract is done, then this length is purged.
 
-  #define PAUSE_PARK_NOZZLE_TIMEOUT 45        // (seconds) Time limit before the nozzle is turned off for safety.
-  #define FILAMENT_CHANGE_ALERT_BEEPS 10      // Number of alert beeps to play when a response is needed.
-  #define PAUSE_PARK_NO_STEPPER_TIMEOUT       // Enable for XYZ steppers to stay powered on during filament change.
+  #define PAUSE_PARK_NOZZLE_TIMEOUT           45  // (seconds) Time limit before the nozzle is turned off for safety.
+  #define FILAMENT_CHANGE_ALERT_BEEPS         10  // Number of alert beeps to play when a response is needed.
+  #define PAUSE_PARK_NO_STEPPER_TIMEOUT           // Enable for XYZ steppers to stay powered on during filament change.
 
-  //#define PARK_HEAD_ON_PAUSE                // Park the nozzle during pause and filament change.
-  //#define HOME_BEFORE_FILAMENT_CHANGE       // Ensure homing has been completed prior to parking for filament change
+  //#define PARK_HEAD_ON_PAUSE                    // Park the nozzle during pause and filament change.
+  //#define HOME_BEFORE_FILAMENT_CHANGE           // Ensure homing has been completed prior to parking for filament change
 
-  //#define FILAMENT_LOAD_UNLOAD_GCODES       // Add M701/M702 Load/Unload G-codes, plus Load/Unload in the LCD Prepare menu.
-  //#define FILAMENT_UNLOAD_ALL_EXTRUDERS     // Allow M702 to unload all extruders above a minimum target temp (as set by M302)
+  //#define FILAMENT_LOAD_UNLOAD_GCODES           // Add M701/M702 Load/Unload G-codes, plus Load/Unload in the LCD Prepare menu.
+  //#define FILAMENT_UNLOAD_ALL_EXTRUDERS         // Allow M702 to unload all extruders above a minimum target temp (as set by M302)
 #endif
 
 // @section tmc
@@ -950,21 +991,19 @@
  * You will need to import the TMC26XStepper library into the Arduino IDE for this
  * (https://github.com/trinamic/TMC26XStepper.git)
  */
-//#define HAVE_TMCDRIVER
-
-#if ENABLED(HAVE_TMCDRIVER)
-
-  //#define X_IS_TMC
-  //#define X2_IS_TMC
-  //#define Y_IS_TMC
-  //#define Y2_IS_TMC
-  //#define Z_IS_TMC
-  //#define Z2_IS_TMC
-  //#define E0_IS_TMC
-  //#define E1_IS_TMC
-  //#define E2_IS_TMC
-  //#define E3_IS_TMC
-  //#define E4_IS_TMC
+//#define HAVE_TMC26X
+#if ENABLED(HAVE_TMC26X)  // Choose your axes here. This is mandatory!
+  //#define X_IS_TMC26X
+  //#define X2_IS_TMC26X
+  //#define Y_IS_TMC26X
+  //#define Y2_IS_TMC26X
+  //#define Z_IS_TMC26X
+  //#define Z2_IS_TMC26X
+  //#define E0_IS_TMC26X
+  //#define E1_IS_TMC26X
+  //#define E2_IS_TMC26X
+  //#define E3_IS_TMC26X
+  //#define E4_IS_TMC26X
 
   #define X_MAX_CURRENT     1000 // in mA
   #define X_SENSE_RESISTOR    91 // in mOhms
@@ -1012,7 +1051,7 @@
 
 #endif
 
-// @section TMC2130, TMC2208
+// @section tmc_smart
 
 /**
  * Enable this for SilentStepStick Trinamic TMC2130 SPI-configurable stepper drivers.
@@ -1026,6 +1065,19 @@
  * You may also use software SPI if you wish to use general purpose IO pins.
  */
 //#define HAVE_TMC2130
+#if ENABLED(HAVE_TMC2130)  // Choose your axes here. This is mandatory!
+  //#define X_IS_TMC2130
+  //#define X2_IS_TMC2130
+  //#define Y_IS_TMC2130
+  //#define Y2_IS_TMC2130
+  //#define Z_IS_TMC2130
+  //#define Z2_IS_TMC2130
+  //#define E0_IS_TMC2130
+  //#define E1_IS_TMC2130
+  //#define E2_IS_TMC2130
+  //#define E3_IS_TMC2130
+  //#define E4_IS_TMC2130
+#endif
 
 /**
  * Enable this for SilentStepStick Trinamic TMC2208 UART-configurable stepper drivers.
@@ -1038,22 +1090,7 @@
  * (https://github.com/teemuatlut/TMC2208Stepper).
  */
 //#define HAVE_TMC2208
-
-#if ENABLED(HAVE_TMC2130) || ENABLED(HAVE_TMC2208)
-
-  // CHOOSE YOUR MOTORS HERE, THIS IS MANDATORY
-  //#define X_IS_TMC2130
-  //#define X2_IS_TMC2130
-  //#define Y_IS_TMC2130
-  //#define Y2_IS_TMC2130
-  //#define Z_IS_TMC2130
-  //#define Z2_IS_TMC2130
-  //#define E0_IS_TMC2130
-  //#define E1_IS_TMC2130
-  //#define E2_IS_TMC2130
-  //#define E3_IS_TMC2130
-  //#define E4_IS_TMC2130
-
+#if ENABLED(HAVE_TMC2208)  // Choose your axes here. This is mandatory!
   //#define X_IS_TMC2208
   //#define X2_IS_TMC2208
   //#define Y_IS_TMC2208
@@ -1065,10 +1102,9 @@
   //#define E2_IS_TMC2208
   //#define E3_IS_TMC2208
   //#define E4_IS_TMC2208
+#endif
 
-  /**
-   * Stepper driver settings
-   */
+#if ENABLED(HAVE_TMC2130) || ENABLED(HAVE_TMC2208)
 
   #define R_SENSE           0.11  // R_sense resistor for SilentStepStick2130
   #define HOLD_MULTIPLIER    0.5  // Scales down the holding current from run current
@@ -1421,11 +1457,6 @@
  * Auto-report temperatures with M155 S<seconds>
  */
 #define AUTO_REPORT_TEMPERATURES
-
-/**
- * Auto-report SdCard status with M27 S<seconds>
- */
-//#define AUTO_REPORT_SD_STATUS
 
 /**
  * Include capabilities in M115 output

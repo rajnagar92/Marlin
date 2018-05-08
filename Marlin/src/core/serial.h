@@ -32,7 +32,7 @@
 /**
  * Define debug bit-masks
  */
-enum DebugFlags {
+enum DebugFlags : unsigned char {
   DEBUG_NONE          = 0,
   DEBUG_ECHO          = _BV(0), ///< Echo commands in order as they are processed
   DEBUG_INFO          = _BV(1), ///< Print messages for code that has debug output
@@ -43,23 +43,6 @@ enum DebugFlags {
   DEBUG_MESH_ADJUST   = _BV(6), ///< UBL bed leveling
   DEBUG_ALL           = 0xFF
 };
-
-#if ENABLED(EMERGENCY_PARSER)
-  enum e_parser_state {
-    state_RESET,
-    state_N,
-    state_M,
-    state_M1,
-    state_M10,
-    state_M108,
-    state_M11,
-    state_M112,
-    state_M4,
-    state_M41,
-    state_M410,
-    state_IGNORE // to '\n'
-  };
-#endif
 
 extern uint8_t marlin_debug_flags;
 #define DEBUGGING(F) (marlin_debug_flags & (DEBUG_## F))

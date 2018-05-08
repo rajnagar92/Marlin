@@ -109,14 +109,14 @@ void process_lcd_c_command(const char* command) {
       // M104 S<temperature>
       char cmd[20];
       sprintf_P(cmd, PSTR("M104 S%s"), command + 1);
-      enqueue_and_echo_command_now(cmd, false);
+      enqueue_and_echo_command_now(cmd);
     } break;
 
     case 'P': {
       // M140 S<temperature>
       char cmd[20];
       sprintf_P(cmd, PSTR("M140 S%s"), command + 1);
-      enqueue_and_echo_command_now(cmd, false);
+      enqueue_and_echo_command_now(cmd);
     } break;
 
     default:
@@ -178,8 +178,8 @@ void process_lcd_j_command(const char* command) {
     case 'E':
       // enable or disable steppers
       // switch to relative
-      enqueue_and_echo_command_now("G91");
-      enqueue_and_echo_command_now(steppers_enabled ? "M18" : "M17");
+      enqueue_and_echo_commands_now_P(PSTR("G91"));
+      enqueue_and_echo_commands_now_P(steppers_enabled ? PSTR("M18") : PSTR("M17"));
       steppers_enabled = !steppers_enabled;
       break;
     case 'A':
@@ -228,7 +228,11 @@ void process_lcd_p_command(const char* command) {
     case 'X':
       // cancel print
       write_to_lcd_P(PSTR("{SYS:CANCELING}"));
-      card.stopSDPrint();
+      card.stopSDPrint(
+        #if SD_RESORT
+          true
+        #endif
+      );
       clear_command_queue();
       quickstop_stepper();
       print_job_timer.stop();
@@ -241,7 +245,7 @@ void process_lcd_p_command(const char* command) {
       break;
     case 'H':
       // Home all axis
-      enqueue_and_echo_command_now("G28");
+      enqueue_and_echo_commands_now_P(PSTR("G28"));
       break;
     default: {
       // Print file 000 - a three digit number indicating which
@@ -298,7 +302,7 @@ void process_lcd_s_command(const char* command) {
 
     case 'H':
       // Home all axis
-      enqueue_and_echo_command("G28", false);
+      enqueue_and_echo_commands_P(PSTR("G28"));
       break;
 
     case 'L': {
@@ -389,7 +393,7 @@ void update_usb_status(const bool forceUpdate) {
  * The optimize attribute fixes a register Compile
  * error for amtel.
  */
-void lcd_update() _O2 {
+void lcd_update() {
   static char inbound_buffer[MAX_CURLY_COMMAND];
 
   // First report USB status.
@@ -448,4 +452,4 @@ void lcd_setalertstatusPGM(const char* message) {
   write_to_lcd(message_buffer);
 }
 
-#endif // Malyan LCD
+#endif // MALYAN_LCD

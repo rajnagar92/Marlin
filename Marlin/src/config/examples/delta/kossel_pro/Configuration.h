@@ -320,6 +320,7 @@
 #define TEMP_SENSOR_3 0
 #define TEMP_SENSOR_4 0
 #define TEMP_SENSOR_BED 5
+#define TEMP_SENSOR_CHAMBER 0
 
 // Dummy thermistor constant temperature readings, for use with 998 and 999
 #define DUMMY_THERMISTOR_998_VALUE 25
@@ -381,32 +382,39 @@
                                   // is more than PID_FUNCTIONAL_RANGE then the PID will be shut off and the heater will be set to min/max.
 
   // Kossel Pro
-  #define  DEFAULT_Kp 19.30
-  #define  DEFAULT_Ki 3.51
-  #define  DEFAULT_Kd 26.56
+  #define DEFAULT_Kp 19.30
+  #define DEFAULT_Ki 3.51
+  #define DEFAULT_Kd 26.56
 
 #endif // PIDTEMP
 
 //===========================================================================
 //============================= PID > Bed Temperature Control ===============
 //===========================================================================
-// Select PID or bang-bang with PIDTEMPBED. If bang-bang, BED_LIMIT_SWITCHING will enable hysteresis
-//
-// Uncomment this to enable PID on the bed. It uses the same frequency PWM as the extruder.
-// If your PID_dT is the default, and correct for your hardware/configuration, that means 7.689Hz,
-// which is fine for driving a square wave into a resistive load and does not significantly impact you FET heating.
-// This also works fine on a Fotek SSR-10DA Solid State Relay into a 250W heater.
-// If your configuration is significantly different than this and you don't understand the issues involved, you probably
-// shouldn't use bed PID until someone else verifies your hardware works.
-// If this is enabled, find your own PID constants below.
+
+/**
+ * PID Bed Heating
+ *
+ * If this option is enabled set PID constants below.
+ * If this option is disabled, bang-bang will be used and BED_LIMIT_SWITCHING will enable hysteresis.
+ *
+ * The PID frequency will be the same as the extruder PWM.
+ * If PID_dT is the default, and correct for the hardware/configuration, that means 7.689Hz,
+ * which is fine for driving a square wave into a resistive load and does not significantly
+ * impact FET heating. This also works fine on a Fotek SSR-10DA Solid State Relay into a 250W
+ * heater. If your configuration is significantly different than this and you don't understand
+ * the issues involved, don't use bed PID until someone else verifies that your hardware works.
+ */
 #define PIDTEMPBED
 
 //#define BED_LIMIT_SWITCHING
 
-// This sets the max power delivered to the bed, and replaces the HEATER_BED_DUTY_CYCLE_DIVIDER option.
-// all forms of bed control obey this (PID, bang-bang, bang-bang with hysteresis)
-// setting this to anything other than 255 enables a form of PWM to the bed just like HEATER_BED_DUTY_CYCLE_DIVIDER did,
-// so you shouldn't use it unless you are OK with PWM on your bed.  (see the comment on enabling PIDTEMPBED)
+/**
+ * Max Bed Power
+ * Applies to all forms of bed control (PID, bang-bang, and bang-bang with hysteresis).
+ * When set to any value below 255, enables a form of PWM to the bed that acts like a divider
+ * so don't use it unless you are OK with PWM on your bed. (See the comment on enabling PIDTEMPBED)
+ */
 #define MAX_BED_POWER 255 // limits duty cycle to bed; 255=full current
 
 #if ENABLED(PIDTEMPBED)
@@ -415,9 +423,9 @@
 
   //Kossel Pro heated bed plate with borosilicate glass
   //from pidautotune (M303 E-1 S60 C8)
-  #define  DEFAULT_bedKp 370.25
-  #define  DEFAULT_bedKi 62.77
-  #define  DEFAULT_bedKd 545.98
+  #define DEFAULT_bedKp 370.25
+  #define DEFAULT_bedKi 62.77
+  #define DEFAULT_bedKd 545.98
 
   // FIND YOUR OWN: "M303 E-1 C8 S90" to run autotune on the bed at 90 degreesC for 8 cycles.
 #endif // PIDTEMPBED
@@ -500,19 +508,13 @@
   #if ENABLED(DELTA_AUTO_CALIBRATION)
     // set the default number of probe points : n*n (1 -> 7)
     #define DELTA_CALIBRATION_DEFAULT_POINTS 4
-
-    // Enable and set these values based on results of 'G33 A'
-    //#define H_FACTOR 1.01
-    //#define R_FACTOR 2.61
-    //#define A_FACTOR 0.87
-
   #endif
 
   #if ENABLED(DELTA_AUTO_CALIBRATION) || ENABLED(DELTA_CALIBRATION_MENU)
-    // Set the radius for the calibration probe points - max 0.9 * DELTA_PRINTABLE_RADIUS for non-eccentric probes
+    // Set the radius for the calibration probe points - max DELTA_PRINTABLE_RADIUS for non-eccentric probes
     #define DELTA_CALIBRATION_RADIUS 110.0 // mm
     // Set the steprate for papertest probing
-    #define PROBE_MANUALLY_STEP 0.025
+    #define PROBE_MANUALLY_STEP 0.05 // mm
   #endif
 
   // Print surface diameter/2 minus unreachable space (avoid collisions with vertical towers).
@@ -628,7 +630,15 @@
  * Override with M92
  *                                      X, Y, Z, E0 [, E1[, E2[, E3[, E4]]]]
  */
-#define DEFAULT_AXIS_STEPS_PER_UNIT   { XYZ_STEPS, XYZ_STEPS, XYZ_STEPS, 184.8 }
+// variables to calculate steps
+#define XYZ_FULL_STEPS_PER_ROTATION 200
+#define XYZ_MICROSTEPS 32
+#define XYZ_BELT_PITCH 2
+#define XYZ_PULLEY_TEETH 20
+
+// delta speeds must be the same on xyz
+#define DEFAULT_XYZ_STEPS_PER_UNIT ((XYZ_FULL_STEPS_PER_ROTATION) * (XYZ_MICROSTEPS) / double(XYZ_BELT_PITCH) / double(XYZ_PULLEY_TEETH))
+#define DEFAULT_AXIS_STEPS_PER_UNIT   { DEFAULT_XYZ_STEPS_PER_UNIT, DEFAULT_XYZ_STEPS_PER_UNIT, DEFAULT_XYZ_STEPS_PER_UNIT, 184.8 }  // default steps per unit for Kossel (GT2, 20 tooth)
 
 /**
  * Default Max Feed Rate (mm/s)
@@ -670,6 +680,17 @@
 #define DEFAULT_ZJERK                 DEFAULT_XJERK // Must be same as XY for delta
 #define DEFAULT_EJERK                  5.0
 
+/**
+ * Realtime Jerk Control
+ *
+ * This option eliminates vibration during printing by fitting a Bézier
+ * curve to move acceleration, producing much smoother direction changes.
+ * Because this is computationally-intensive, a 32-bit MCU is required.
+ *
+ * See https://github.com/synthetos/TinyG/wiki/Jerk-Controlled-Motion-Explained
+ */
+//#define BEZIER_JERK_CONTROL
+
 //===========================================================================
 //============================= Z Probe Options =============================
 //===========================================================================
@@ -684,7 +705,7 @@
  *
  * Enable this option for a probe connected to the Z Min endstop pin.
  */
-//#define Z_MIN_PROBE_USES_Z_MIN_ENDSTOP_PIN
+#define Z_MIN_PROBE_USES_Z_MIN_ENDSTOP_PIN
 
 /**
  * Z_MIN_PROBE_ENDSTOP
@@ -705,7 +726,7 @@
  * disastrous consequences. Use with caution and do your homework.
  *
  */
-#define Z_MIN_PROBE_ENDSTOP
+//#define Z_MIN_PROBE_ENDSTOP
 
 /**
  * Probe Type
@@ -730,7 +751,7 @@
 /**
  * Z Servo Probe, such as an endstop switch on a rotating arm.
  */
-//#define Z_ENDSTOP_SERVO_NR 0   // Defaults to SERVO 0 connector.
+//#define Z_PROBE_SERVO_NR 0   // Defaults to SERVO 0 connector.
 //#define Z_SERVO_ANGLES {70,0}  // Z Servo Deploy and Stow angles
 
 /**
@@ -749,6 +770,9 @@
  * readings with inductive probes and piezo sensors.
  */
 //#define PROBING_HEATERS_OFF       // Turn heaters off when probing
+#if ENABLED(PROBING_HEATERS_OFF)
+  //#define WAIT_FOR_BED_HEATER     // Wait for bed to heat back up between probes (to improve accuracy)
+#endif
 //#define PROBING_FANS_OFF          // Turn fans off when probing
 //#define DELAY_BEFORE_PROBING 200  // (ms) To prevent vibrations from triggering piezo sensors
 
@@ -789,13 +813,16 @@
  * not giving someone a head crash. Use something like G29 Z-0.2 to adjust as needed.
  */
 #define Z_PROBE_OFFSET_FROM_EXTRUDER -17.25  // Increase this if the first layer is too thin (remember: it's a negative number so increase means closer to zero).
+// Certain types of probes need to stay away from edges
+#define MIN_PROBE_EDGE 10
+
 // X and Y axis travel speed (mm/m) between probes
 #define XY_PROBE_SPEED 8000
 
-// Speed for the first approach when double-probing (MULTIPLE_PROBING == 2)
+// Feedrate (mm/m) for the first approach when double-probing (MULTIPLE_PROBING == 2)
 #define Z_PROBE_SPEED_FAST HOMING_FEEDRATE_Z
 
-// Speed for the "accurate" probe of each point
+// Feedrate (mm/m) for the "accurate" probe of each point
 #define Z_PROBE_SPEED_SLOW (Z_PROBE_SPEED_FAST / 2)
 
 // The number of probes to perform at each point.
@@ -872,6 +899,9 @@
  */
 #define Z_CLEARANCE_DEPLOY_PROBE   100 // Z Clearance for Deploy/Stow
 #define Z_CLEARANCE_BETWEEN_PROBES   5 // Z Clearance between probe points
+//#define Z_AFTER_PROBING            5 // Z position after probing is done
+
+#define Z_PROBE_LOW_POINT          -2 // Farthest distance below the trigger-point to go before stopping
 
 // For M851 give a range for adjusting the Z probe offset
 
@@ -924,6 +954,8 @@
 
 //#define NO_MOTION_BEFORE_HOMING  // Inhibit movement until all axes have been homed
 
+//#define UNKNOWN_Z_NO_RAISE // Don't raise Z (lower the bed) if Z is "unknown." For beds that fall when Z is powered off.
+
 //#define Z_HOMING_HEIGHT 4  // (in mm) Minimal z height before homing (G28) for Z clearance above the bed, clamps, ...
                              // Be sure you have this distance over your Z_MAX_POS in case.
 
@@ -970,6 +1002,10 @@
   #define MAX_SOFTWARE_ENDSTOP_X
   #define MAX_SOFTWARE_ENDSTOP_Y
   #define MAX_SOFTWARE_ENDSTOP_Z
+#endif
+
+#if ENABLED(MIN_SOFTWARE_ENDSTOPS) || ENABLED(MAX_SOFTWARE_ENDSTOPS)
+  //#define SOFT_ENDSTOPS_MENU_ITEM  // Enable/Disable software endstops from the LCD
 #endif
 
 /**
@@ -1069,9 +1105,6 @@
     #define MESH_TEST_BED_TEMP      60.0  // (°C) Default bed temperature for the G26 Mesh Validation Tool.
   #endif
 
-  // Set the boundaries for probing (where the probe can reach).
-  #define DELTA_PROBEABLE_RADIUS (DELTA_PRINTABLE_RADIUS - 10)
-
 #endif
 
 #if ENABLED(AUTO_BED_LEVELING_LINEAR) || ENABLED(AUTO_BED_LEVELING_BILINEAR)
@@ -1081,13 +1114,11 @@
   #define GRID_MAX_POINTS_X 7
   #define GRID_MAX_POINTS_Y GRID_MAX_POINTS_X
 
-  // The Z probe minimum outer margin (to validate G29 parameters).
-  #define MIN_PROBE_EDGE 10
-
-  #define LEFT_PROBE_BED_POSITION -(DELTA_PROBEABLE_RADIUS)
-  #define RIGHT_PROBE_BED_POSITION DELTA_PROBEABLE_RADIUS
-  #define FRONT_PROBE_BED_POSITION -(DELTA_PROBEABLE_RADIUS)
-  #define BACK_PROBE_BED_POSITION DELTA_PROBEABLE_RADIUS
+  // Set the boundaries for probing (where the probe can reach).
+  //#define LEFT_PROBE_BED_POSITION -(DELTA_PRINTABLE_RADIUS -(MIN_PROBE_EDGE))
+  //#define RIGHT_PROBE_BED_POSITION DELTA_PRINTABLE_RADIUS -(MIN_PROBE_EDGE)
+  //#define FRONT_PROBE_BED_POSITION -(DELTA_PRINTABLE_RADIUS -(MIN_PROBE_EDGE))
+  //#define BACK_PROBE_BED_POSITION DELTA_PRINTABLE_RADIUS -(MIN_PROBE_EDGE)
 
   // Probe along the Y axis, advancing X after each column
   //#define PROBE_Y_FIRST
@@ -1110,17 +1141,6 @@
 
   #endif
 
-#elif ENABLED(AUTO_BED_LEVELING_3POINT)
-
-  // 3 arbitrary points to probe.
-  // A simple cross-product is used to estimate the plane of the bed.
-  #define ABL_PROBE_PT_1_X 15
-  #define ABL_PROBE_PT_1_Y 180
-  #define ABL_PROBE_PT_2_X 15
-  #define ABL_PROBE_PT_2_Y 20
-  #define ABL_PROBE_PT_3_X 170
-  #define ABL_PROBE_PT_3_Y 20
-
 #elif ENABLED(AUTO_BED_LEVELING_UBL)
 
   //===========================================================================
@@ -1129,18 +1149,9 @@
 
   //#define MESH_EDIT_GFX_OVERLAY   // Display a graphics overlay while editing the mesh
 
-  #define MESH_INSET 1              // Mesh inset margin on print area
+  #define MESH_INSET 1              // Set Mesh bounds as an inset region of the bed
   #define GRID_MAX_POINTS_X 10      // Don't use more than 15 points per axis, implementation limited.
   #define GRID_MAX_POINTS_Y GRID_MAX_POINTS_X
-
-  #define _PX(R,A) (R) * cos(RADIANS(A))
-  #define _PY(R,A) (R) * sin(RADIANS(A))
-  #define UBL_PROBE_PT_1_X _PX(DELTA_PROBEABLE_RADIUS, 0)   // Probing points for 3-Point leveling of the mesh
-  #define UBL_PROBE_PT_1_Y _PY(DELTA_PROBEABLE_RADIUS, 0)
-  #define UBL_PROBE_PT_2_X _PX(DELTA_PROBEABLE_RADIUS, 120)
-  #define UBL_PROBE_PT_2_Y _PY(DELTA_PROBEABLE_RADIUS, 120)
-  #define UBL_PROBE_PT_3_X _PX(DELTA_PROBEABLE_RADIUS, 240)
-  #define UBL_PROBE_PT_3_Y _PY(DELTA_PROBEABLE_RADIUS, 240)
 
   #define UBL_MESH_EDIT_MOVES_Z     // Sophisticated users prefer no movement of nozzle
   #define UBL_SAVE_ACTIVE_ON_M500   // Save the currently active mesh in the current slot on M500
@@ -1154,13 +1165,26 @@
   //=================================== Mesh ==================================
   //===========================================================================
 
-  #define MESH_INSET 10          // Mesh inset margin on print area
+  #define MESH_INSET 10          // Set Mesh bounds as an inset region of the bed
   #define GRID_MAX_POINTS_X 3    // Don't use more than 7 points per axis, implementation limited.
   #define GRID_MAX_POINTS_Y GRID_MAX_POINTS_X
 
   //#define MESH_G28_REST_ORIGIN // After homing all axes ('G28' or 'G28 XYZ') rest Z at Z_MIN_POS
 
 #endif // BED_LEVELING
+
+/**
+ * Points to probe for all 3-point Leveling procedures.
+ * Override if the automatically selected points are inadequate.
+ */
+#if ENABLED(AUTO_BED_LEVELING_3POINT) || ENABLED(AUTO_BED_LEVELING_UBL)
+  //#define PROBE_PT_1_X 15
+  //#define PROBE_PT_1_Y 180
+  //#define PROBE_PT_2_X 15
+  //#define PROBE_PT_2_Y 20
+  //#define PROBE_PT_3_X 170
+  //#define PROBE_PT_3_Y 20
+#endif
 
 /**
  * Use the LCD controller for bed leveling
@@ -1175,6 +1199,11 @@
 
 // Add a menu item to move between bed corners for manual bed adjustment
 //#define LEVEL_BED_CORNERS
+
+#if ENABLED(LEVEL_BED_CORNERS)
+  #define LEVEL_CORNERS_INSET 30    // (mm) An inset for corner leveling
+  //#define LEVEL_CENTER_TOO        // Move to the center after the last corner
+#endif
 
 /**
  * Commands to execute at the end of G29 probing.
@@ -1448,11 +1477,11 @@
  *
  * Select the language to display on the LCD. These languages are available:
  *
- *    en, an, bg, ca, cn, cz, cz_utf8, de, el, el-gr, es, es_utf8, eu, fi, fr, fr_utf8,
- *    gl, hr, it, kana, kana_utf8, nl, pl, pt, pt_utf8, pt-br, pt-br_utf8, ru, sk_utf8,
+ *    en, an, bg, ca, cn, cz, de, el, el-gr, es, eu, fi, fr,
+ *    gl, hr, it, jp-kana, nl, pl, pt, pt-br, ru, sk,
  *    tr, uk, zh_CN, zh_TW, test
  *
- * :{ 'en':'English', 'an':'Aragonese', 'bg':'Bulgarian', 'ca':'Catalan', 'cn':'Chinese', 'cz':'Czech', 'cz_utf8':'Czech (UTF8)', 'de':'German', 'el':'Greek', 'el-gr':'Greek (Greece)', 'es':'Spanish', 'es_utf8':'Spanish (UTF8)', 'eu':'Basque-Euskera', 'fi':'Finnish', 'fr':'French', 'fr_utf8':'French (UTF8)', 'gl':'Galician', 'hr':'Croatian', 'it':'Italian', 'kana':'Japanese', 'kana_utf8':'Japanese (UTF8)', 'nl':'Dutch', 'pl':'Polish', 'pt':'Portuguese', 'pt-br':'Portuguese (Brazilian)', 'pt-br_utf8':'Portuguese (Brazilian UTF8)', 'pt_utf8':'Portuguese (UTF8)', 'ru':'Russian', 'sk_utf8':'Slovak (UTF8)', 'tr':'Turkish', 'uk':'Ukrainian', 'zh_CN':'Chinese (Simplified)', 'zh_TW':'Chinese (Taiwan)', test':'TEST' }
+ * :{ 'en':'English', 'an':'Aragonese', 'bg':'Bulgarian', 'ca':'Catalan', 'cn':'Chinese', 'cz':'Czech', 'de':'German', 'el':'Greek', 'el-gr':'Greek (Greece)', 'es':'Spanish', 'eu':'Basque-Euskera', 'fi':'Finnish', 'fr':'French', 'gl':'Galician', 'hr':'Croatian', 'it':'Italian', 'jp-kana':'Japanese', 'nl':'Dutch', 'pl':'Polish', 'pt':'Portuguese', 'pt-br':'Portuguese (Brazilian)', 'ru':'Russian', 'sk':'Slovak', 'tr':'Turkish', 'uk':'Ukrainian', 'zh_CN':'Chinese (Simplified)', 'zh_TW':'Chinese (Traditional)', test':'TEST' }
  */
 #define LCD_LANGUAGE en
 
@@ -1518,6 +1547,15 @@
  * Use CRC checks and retries on the SD communication.
  */
 //#define SD_CHECK_AND_RETRY
+
+/**
+ * LCD Menu Items
+ *
+ * Disable all menus and only display the Status Screen, or
+ * just remove some extraneous menu items to recover space.
+ */
+//#define NO_LCD_MENUS
+//#define SLIM_LCD_MENUS
 
 //
 // ENCODER SETTINGS

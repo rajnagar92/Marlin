@@ -29,13 +29,16 @@
 #include "../../module/printcounter.h"
 #include "../../module/stepper.h"
 
-#if ENABLED(PARK_HEAD_ON_PAUSE)
-  #include "../../feature/pause.h"
-  #include "../queue.h"
+#if ENABLED(POWER_LOSS_RECOVERY)
+  #include "../../feature/power_loss_recovery.h"
 #endif
 
-#if NUM_SERIAL > 1
-  #include "../../gcode/queue.h"
+#if ENABLED(PARK_HEAD_ON_PAUSE)
+  #include "../../feature/pause.h"
+#endif
+
+#if ENABLED(PARK_HEAD_ON_PAUSE) || NUM_SERIAL > 1
+  #include "../queue.h"
 #endif
 
 /**
@@ -78,6 +81,10 @@ void GcodeSuite::M23() {
  * M24: Start or Resume SD Print
  */
 void GcodeSuite::M24() {
+  #if ENABLED(POWER_LOSS_RECOVERY)
+    card.removeJobRecoveryFile();
+  #endif
+
   #if ENABLED(PARK_HEAD_ON_PAUSE)
     resume_print();
   #endif
@@ -108,21 +115,34 @@ void GcodeSuite::M26() {
 
 /**
  * M27: Get SD Card status
+ *      OR, with 'S<seconds>' set the SD status auto-report interval. (Requires AUTO_REPORT_SD_STATUS)
+ *      OR, with 'C' get the current filename.
  */
 void GcodeSuite::M27() {
-  card.getStatus(
-    #if NUM_SERIAL > 1
-      command_queue_port[cmd_queue_index_r]
-    #endif
-  );
+  #if NUM_SERIAL > 1
+    const int16_t port = command_queue_port[cmd_queue_index_r];
+  #endif
+
+  if (parser.seen('C')) {
+    SERIAL_ECHOPGM_P(port, "Current file: ");
+    card.printFilename();
+  }
+
   #if ENABLED(AUTO_REPORT_SD_STATUS)
-  if (parser.seenval('S'))
-    card.set_auto_report_interval(parser.value_byte()
+    else if (parser.seenval('S'))
+      card.set_auto_report_interval(parser.value_byte()
+        #if NUM_SERIAL > 1
+          , port
+        #endif
+      );
+  #endif
+
+  else
+    card.getStatus(
       #if NUM_SERIAL > 1
-        , command_queue_port[cmd_queue_index_r]
+        port
       #endif
     );
-  #endif
 }
 
 /**

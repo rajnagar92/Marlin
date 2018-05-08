@@ -44,7 +44,7 @@
 #define HAL_TIMER_RATE         (HAL_RCC_GetSysClockFreq() / 2)  // frequency of timer peripherals
 #define STEPPER_TIMER_PRESCALE 54            // was 40,prescaler for setting stepper timer, 2Mhz
 #define HAL_STEPPER_TIMER_RATE (HAL_TIMER_RATE / STEPPER_TIMER_PRESCALE)   // frequency of stepper timer (HAL_TIMER_RATE / STEPPER_TIMER_PRESCALE)
-#define HAL_TICKS_PER_US       ((HAL_STEPPER_TIMER_RATE) / 1000000) // stepper timer ticks per us
+#define HAL_TICKS_PER_US       ((HAL_STEPPER_TIMER_RATE) / 1000000) // stepper timer ticks per µs
 
 #define PULSE_TIMER_NUM STEP_TIMER_NUM
 #define PULSE_TIMER_PRESCALE STEPPER_TIMER_PRESCALE
@@ -52,13 +52,14 @@
 #define TEMP_TIMER_PRESCALE     1000 // prescaler for setting Temp timer, 72Khz
 #define TEMP_TIMER_FREQUENCY    1000 // temperature interrupt frequency
 
+#define STEP_TIMER_MIN_INTERVAL    8 // minimum time in µs between stepper interrupts
+
 #define ENABLE_STEPPER_DRIVER_INTERRUPT() HAL_timer_enable_interrupt(STEP_TIMER_NUM)
 #define DISABLE_STEPPER_DRIVER_INTERRUPT() HAL_timer_disable_interrupt(STEP_TIMER_NUM)
 
 #define ENABLE_TEMPERATURE_INTERRUPT() HAL_timer_enable_interrupt(TEMP_TIMER_NUM)
 #define DISABLE_TEMPERATURE_INTERRUPT() HAL_timer_disable_interrupt(TEMP_TIMER_NUM)
 
-#define HAL_ENABLE_ISRs() do { if (thermalManager.in_temp_isr)DISABLE_TEMPERATURE_INTERRUPT(); else ENABLE_TEMPERATURE_INTERRUPT(); ENABLE_STEPPER_DRIVER_INTERRUPT(); } while(0)
 // TODO change this
 
 
@@ -94,7 +95,9 @@ void HAL_timer_disable_interrupt(const uint8_t timer_num);
 void HAL_timer_set_compare(const uint8_t timer_num, const uint32_t compare);
 hal_timer_t HAL_timer_get_compare(const uint8_t timer_num);
 uint32_t HAL_timer_get_count(const uint8_t timer_num);
+void HAL_timer_restrain(const uint8_t timer_num, const uint16_t interval_ticks);
 
 void HAL_timer_isr_prologue(const uint8_t timer_num);
+#define HAL_timer_isr_epilogue(TIMER_NUM)
 
 #endif // _HAL_TIMERS_STM32F7_H

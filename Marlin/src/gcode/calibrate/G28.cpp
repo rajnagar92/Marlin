@@ -39,6 +39,10 @@
   #include "../../feature/tmc_util.h"
 #endif
 
+#if HOMING_Z_WITH_PROBE
+  #include "../../module/probe.h"
+#endif
+
 #include "../../lcd/ultralcd.h"
 
 #if ENABLED(QUICK_HOME)
@@ -74,7 +78,6 @@
     #if ENABLED(SENSORLESS_HOMING)
       sensorless_homing_per_axis(X_AXIS, false);
       sensorless_homing_per_axis(Y_AXIS, false);
-      safe_delay(500); // Short delay needed to settle
     #endif
   }
 
@@ -149,7 +152,9 @@
  *  None  Home to all axes with no parameters.
  *        With QUICK_HOME enabled XY will home together, then Z.
  *
- * Cartesian parameters
+ *  Rn  Raise by n mm/inches before homing
+ *
+ * Cartesian/SCARA parameters
  *
  *  X   Home to the X endstop
  *  Y   Home to the Y endstop
@@ -176,7 +181,7 @@ void GcodeSuite::G28(const bool always_home_all) {
   // Disable the leveling matrix before homing
   #if HAS_LEVELING
     #if ENABLED(RESTORE_LEVELING_AFTER_G28)
-      const bool leveling_state_at_entry = planner.leveling_active;
+      const bool leveling_was_active = planner.leveling_active;
     #endif
     set_bed_leveling_enabled(false);
   #endif
@@ -187,7 +192,9 @@ void GcodeSuite::G28(const bool always_home_all) {
 
   // Always home with tool 0 active
   #if HOTENDS > 1
-    const uint8_t old_tool_index = active_extruder;
+    #if DISABLED(DELTA) || ENABLED(DELTA_HOME_TO_SAFE_ZONE)
+      const uint8_t old_tool_index = active_extruder;
+    #endif
     tool_change(0, 0, true);
   #endif
 
@@ -221,9 +228,16 @@ void GcodeSuite::G28(const bool always_home_all) {
 
     #endif
 
-    if (home_all || homeX || homeY) {
+    const float z_homing_height = (
+      #if ENABLED(UNKNOWN_Z_NO_RAISE)
+        !axis_known_position[Z_AXIS] ? 0 :
+      #endif
+          (parser.seenval('R') ? parser.value_linear_units() : Z_HOMING_HEIGHT)
+    );
+
+    if (z_homing_height && (home_all || homeX || homeY)) {
       // Raise Z before homing any other axes and z is not already high enough (never lower z)
-      destination[Z_AXIS] = Z_HOMING_HEIGHT;
+      destination[Z_AXIS] = z_homing_height;
       if (destination[Z_AXIS] > current_position[Z_AXIS]) {
 
         #if ENABLED(DEBUG_LEVELING_FEATURE)
@@ -297,6 +311,11 @@ void GcodeSuite::G28(const bool always_home_all) {
         #else
           HOMEAXIS(Z);
         #endif
+
+        #if HOMING_Z_WITH_PROBE && defined(Z_AFTER_PROBING)
+          move_z_after_probing();
+        #endif
+
       } // home_all || homeZ
     #endif // Z_HOME_DIR < 0
 
@@ -312,13 +331,13 @@ void GcodeSuite::G28(const bool always_home_all) {
   #endif
 
   #if ENABLED(RESTORE_LEVELING_AFTER_G28)
-    set_bed_leveling_enabled(leveling_state_at_entry);
+    set_bed_leveling_enabled(leveling_was_active);
   #endif
 
   clean_up_after_endstop_or_probe_move();
 
   // Restore the active tool after homing
-  #if HOTENDS > 1
+  #if HOTENDS > 1 && (DISABLED(DELTA) || ENABLED(DELTA_HOME_TO_SAFE_ZONE))
     #if ENABLED(PARKING_EXTRUDER)
       #define NO_FETCH false // fetch the previous toolhead
     #else

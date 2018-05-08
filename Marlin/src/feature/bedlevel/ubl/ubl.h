@@ -47,7 +47,7 @@
 
 // ubl_G29.cpp
 
-enum MeshPointType { INVALID, REAL, SET_IN_BITMAP };
+enum MeshPointType : char { INVALID, REAL, SET_IN_BITMAP };
 
 // External references
 
@@ -89,7 +89,6 @@ class unified_bed_leveling {
     #endif
 
     static bool g29_parameter_parsing() _O0;
-    static void find_mean_mesh_height();
     static void shift_mesh_height();
     static void probe_entire_mesh(const float &rx, const float &ry, const bool do_ubl_mesh_map, const bool stow_probe, const bool do_furthest) _O0;
     static void tilt_mesh_based_on_3pts(const float &z1, const float &z2, const float &z3);
@@ -124,7 +123,8 @@ class unified_bed_leveling {
     static mesh_index_pair find_furthest_invalid_mesh_point() _O0;
     static void reset();
     static void invalidate();
-    static void set_all_mesh_points_to_value(const float);
+    static void set_all_mesh_points_to_value(const float value);
+    static void adjust_mesh_to_mean(const bool cflag, const float value);
     static bool sanity_check();
 
     static void G29() _O0;                          // O0 for no optimization
@@ -136,7 +136,7 @@ class unified_bed_leveling {
 
     // 15 is the maximum nubmer of grid points supported + 1 safety margin for now,
     // until determinism prevails
-    constexpr static float _mesh_index_to_xpos[16] PROGMEM = {
+    static constexpr float _mesh_index_to_xpos[16] PROGMEM = {
                               MESH_MIN_X +  0 * (MESH_X_DIST), MESH_MIN_X +  1 * (MESH_X_DIST),
                               MESH_MIN_X +  2 * (MESH_X_DIST), MESH_MIN_X +  3 * (MESH_X_DIST),
                               MESH_MIN_X +  4 * (MESH_X_DIST), MESH_MIN_X +  5 * (MESH_X_DIST),
@@ -147,7 +147,7 @@ class unified_bed_leveling {
                               MESH_MIN_X + 14 * (MESH_X_DIST), MESH_MIN_X + 15 * (MESH_X_DIST)
                             };
 
-    constexpr static float _mesh_index_to_ypos[16] PROGMEM = {
+    static constexpr float _mesh_index_to_ypos[16] PROGMEM = {
                               MESH_MIN_Y +  0 * (MESH_Y_DIST), MESH_MIN_Y +  1 * (MESH_Y_DIST),
                               MESH_MIN_Y +  2 * (MESH_Y_DIST), MESH_MIN_Y +  3 * (MESH_Y_DIST),
                               MESH_MIN_Y +  4 * (MESH_Y_DIST), MESH_MIN_Y +  5 * (MESH_Y_DIST),
