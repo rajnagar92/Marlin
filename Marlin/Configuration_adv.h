@@ -444,7 +444,7 @@
 //
 // Use Junction Deviation instead of traditional Jerk Limiting
 //
-//#define JUNCTION_DEVIATION
+#define JUNCTION_DEVIATION
 #if ENABLED(JUNCTION_DEVIATION)
   #define JUNCTION_DEVIATION_FACTOR 0.05
   #define JUNCTION_ACCELERATION_FACTOR 1000
