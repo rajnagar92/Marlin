@@ -662,9 +662,7 @@
  * See https://github.com/synthetos/TinyG/wiki/Jerk-Controlled-Motion-Explained
  */
 
-#define BEZIER_JERK_CONTROL
-
-//#define S_CURVE_ACCELERATION
+#define S_CURVE_ACCELERATION
 
 
 //===========================================================================
