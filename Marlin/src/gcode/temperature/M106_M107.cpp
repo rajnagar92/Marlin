@@ -25,7 +25,13 @@
 #if FAN_COUNT > 0
 
 #include "../gcode.h"
-#include "../../Marlin.h" // for fanSpeeds — should move those to Planner
+#include "../../Marlin.h" // for fan_speed
+
+#include "../../module/motion.h"
+
+#if ENABLED(SINGLENOZZLE)
+  #include "../../module/tool_change.h"
+#endif
 
 /**
  * M106: Set Fan Speed
@@ -41,28 +47,42 @@
  *           3-255 = Set the speed for use with T2
  */
 void GcodeSuite::M106() {
-  const uint8_t p = parser.byteval('P');
-  if (p < FAN_COUNT) {
+  const uint8_t p = parser.byteval('P', MIN(active_extruder, FAN_COUNT - 1));
+
+  if (p < MIN(EXTRUDERS, FAN_COUNT)) {
+    uint16_t s = parser.ushortval('S', 255);
+    NOMORE(s, 255U);
+
+    uint8_t np = p;
+
+    #if ENABLED(SINGLENOZZLE)
+      if (p != active_extruder) {
+        if (p < EXTRUDERS) singlenozzle_fan_speed[p] = s;
+        return;
+      }
+      np = 0; // Always use fan index 0 with SINGLENOZZLE
+    #endif
+
     #if ENABLED(EXTRA_FAN_SPEED)
       const int16_t t = parser.intval('T');
       if (t > 0) {
         switch (t) {
           case 1:
-            fanSpeeds[p] = old_fanSpeeds[p];
+            fan_speed[np] = old_fan_speed[np];
             break;
           case 2:
-            old_fanSpeeds[p] = fanSpeeds[p];
-            fanSpeeds[p] = new_fanSpeeds[p];
+            old_fan_speed[np] = fan_speed[np];
+            fan_speed[np] = new_fan_speed[np];
             break;
           default:
-            new_fanSpeeds[p] = MIN(t, 255);
+            new_fan_speed[np] = MIN(t, 255U);
             break;
         }
         return;
       }
     #endif // EXTRA_FAN_SPEED
-    const uint16_t s = parser.ushortval('S', 255);
-    fanSpeeds[p] = MIN(s, 255U);
+
+    fan_speed[np] = s;
   }
 }
 
@@ -70,8 +90,16 @@ void GcodeSuite::M106() {
  * M107: Fan Off
  */
 void GcodeSuite::M107() {
-  const uint16_t p = parser.ushortval('P');
-  if (p < FAN_COUNT) fanSpeeds[p] = 0;
+  const uint16_t p = parser.byteval('P', active_extruder);
+
+  #if ENABLED(SINGLENOZZLE)
+    if (p != active_extruder) {
+      if (p < EXTRUDERS) singlenozzle_fan_speed[p] = 0;
+      return;
+    }
+  #endif
+
+  if (p < MIN(EXTRUDERS, FAN_COUNT)) fan_speed[p] = 0;
 }
 
 #endif // FAN_COUNT > 0
